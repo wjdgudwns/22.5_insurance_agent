@@ -1,0 +1,14 @@
+# API 키
+.env
+
+# 파이썬 캐시
+*.pyc
+__pycache__/
+
+# 대화 로그 (자동 생성 파일)
+audit_log.csv
+complaint_db.csv
+handoff_db.csv
+
+# 맥OS 시스템 파일
+.DS_Store
