@@ -550,6 +550,13 @@ if st.session_state["mode"] == "user":
             <div style="font-size:4rem;">🛡️</div>
             <h1 style="color:#0057b8; font-weight:700; margin:16px 0 8px;">삼성화재 AI 어시스턴트</h1>
             <p style="color:#666; font-size:1.1rem;">보험 약관 조회부터 청구까지, AI가 도와드립니다.</p>
+            <br>
+            <div style="display:inline-block; background:white; border-radius:12px; padding:20px 36px; box-shadow:0 2px 12px rgba(0,0,0,0.08); text-align:left;">
+                <p style="color:#333; font-weight:600; margin:0 0 12px; font-size:0.95rem;">🔐 테스트 계정 안내</p>
+                <p style="color:#555; margin:4px 0; font-size:0.9rem;">고객 ID : CUST-0001 ~ CUST-0050</p>
+                <p style="color:#555; margin:4px 0; font-size:0.9rem;">관리자 ID : admin</p>
+                <p style="color:#555; margin:4px 0; font-size:0.9rem;">비밀번호 : 1234 (공통)</p>
+            </div>
             <br><br>
             <p style="color:#999;">← 왼쪽에서 로그인해주세요</p>
         </div>
