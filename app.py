@@ -7,14 +7,12 @@ app.py
 import streamlit as st
 import sys, json, os, tempfile, csv
 import pandas as pd
+import plotly.express as px
 from pathlib import Path
 from datetime import datetime, timedelta
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-# ==========================================
-# 페이지 설정
-# ==========================================
 st.set_page_config(
     page_title="삼성화재 AI 보험 어시스턴트",
     page_icon="🛡️",
@@ -22,9 +20,6 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ==========================================
-# 커스텀 CSS
-# ==========================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
@@ -54,9 +49,21 @@ st.markdown("""
     background-color: white !important;
     color: #003876 !important;
     border: 2px solid white !important;
+    font-weight: 700 !important;
+}
+[data-testid="stSidebar"] .stButton > button p,
+[data-testid="stSidebar"] .stButton > button span,
+[data-testid="stSidebar"] .stButton > button div {
+    color: #003876 !important;
 }
 [data-testid="stSidebar"] .stButton > button:hover {
     background-color: #003876 !important;
+    color: white !important;
+    border-color: #003876 !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover p,
+[data-testid="stSidebar"] .stButton > button:hover span,
+[data-testid="stSidebar"] .stButton > button:hover div {
     color: white !important;
 }
 
@@ -78,11 +85,7 @@ st.markdown("""
     color: white !important;
 }
 
-/* 관리자 탭 선택 시 다른 색 */
-.admin-tab .stTabs [aria-selected="true"] {
-    background-color: #1a1a2e !important;
-}
-
+/* 채팅 말풍선 */
 .chat-user {
     background: #0057b8;
     color: white;
@@ -91,8 +94,8 @@ st.markdown("""
     margin: 8px 0;
     margin-left: 20%;
     font-size: 0.95rem;
-    line-height: 1.6;
-    white-space: pre-wrap;
+    line-height: 1.7;
+    word-break: keep-all;
 }
 .chat-bot {
     background: white;
@@ -102,13 +105,23 @@ st.markdown("""
     margin: 8px 0;
     margin-right: 20%;
     font-size: 0.95rem;
-    line-height: 1.6;
+    line-height: 1.7;
     box-shadow: 0 2px 8px rgba(0,0,0,0.06);
     border-left: 3px solid #0057b8;
-    white-space: pre-wrap;
+    word-break: keep-all;
 }
+/* 채팅 내 리스트 정렬 */
+.chat-bot ul, .chat-bot ol { padding-left: 1.5em; margin: 4px 0; }
+.chat-bot li { margin: 2px 0; line-height: 1.7; }
+
 .chat-label-user { text-align:right; font-size:0.75rem; color:#999; margin-bottom:2px; }
 .chat-label-bot  { font-size:0.75rem; color:#999; margin-bottom:2px; }
+
+/* 채팅창 고정 높이 + 스크롤 */
+[data-testid="stVerticalBlockBorderWrapper"] {
+    height: 500px !important;
+    overflow-y: auto !important;
+}
 
 .policy-card {
     background: rgba(255,255,255,0.15);
@@ -118,17 +131,6 @@ st.markdown("""
     border: 1px solid rgba(255,255,255,0.3);
 }
 .policy-card p { margin: 3px 0; font-size: 0.85rem; }
-
-.metric-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    border-top: 4px solid #0057b8;
-    text-align: center;
-}
-.metric-card h2 { color: #0057b8; margin: 8px 0 4px; font-size: 2rem; }
-.metric-card p  { color: #666; margin: 0; font-size: 0.9rem; }
 
 .log-row {
     background: white;
@@ -150,10 +152,10 @@ st.markdown("""
 .badge-claim     { background:#e3f2fd; color:#1565c0; }
 .badge-normal    { background:#e8f5e9; color:#2e7d32; }
 .badge-intent    { background:#f3e5f5; color:#6a1b9a; }
-.badge-blue      { background:#e8f0fe; color:#0057b8; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
-.badge-green     { background:#e8f5e9; color:#2e7d32; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
-.badge-orange    { background:#fff3e0; color:#e65100; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
-.badge-red       { background:#fce4ec; color:#c62828; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
+.badge-blue   { background:#e8f0fe; color:#0057b8; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
+.badge-green  { background:#e8f5e9; color:#2e7d32; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
+.badge-orange { background:#fff3e0; color:#e65100; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
+.badge-red    { background:#fce4ec; color:#c62828; border-radius:20px; padding:2px 10px; font-size:0.8rem; font-weight:500; }
 
 .complaint-row {
     background: white;
@@ -173,20 +175,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==========================================
-# 세션 상태 초기화
-# ==========================================
 def init_session():
     defaults = {
-        "mode":            "user",   # "user" or "admin"
+        "mode":            "user",
         "logged_in":       False,
         "admin_logged_in": False,
         "customer_info":   None,
         "chat_history":    [],
         "claim_step":      None,
         "claim_domain":    None,
-        "complaint_id":    None,   # 현재 세션 민원 ID (중복 방지)
-        "handoff_done":    False,  # 이관 여부 (중복 방지)
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -194,9 +191,6 @@ def init_session():
 
 init_session()
 
-# ==========================================
-# 파일 경로
-# ==========================================
 BASE_PATH    = Path(__file__).parent
 AUDIT_LOG    = BASE_PATH / "audit_log.csv"
 COMPLAINT_DB = BASE_PATH / "complaint_db.csv"
@@ -210,12 +204,9 @@ AUDIT_HEADERS = [
 ]
 
 ADMIN_ID  = "admin"
-ADMIN_PWD = "samsung2026"
+ADMIN_PWD = "1234"
 
 
-# ==========================================
-# 에이전트 로드 (최초 1회)
-# ==========================================
 @st.cache_resource(show_spinner="🔄 AI 엔진 초기화 중...")
 def load_agents():
     from utils.llm_setup import llm, PRODUCT_TO_DOMAIN
@@ -246,9 +237,6 @@ except Exception as e:
     st.stop()
 
 
-# ==========================================
-# 프롬프트 정의
-# ==========================================
 BLOCKED_KEYWORDS = ["씨발", "개새끼", "병신", "존나", "ㅅㅂ", "ㅂㅅ"]
 
 INTENT_ROUTER_PROMPT = """
@@ -306,19 +294,8 @@ POLICY_INFO_PROMPT = """
 답변:"""
 
 
-# ==========================================
-# 로깅 함수
-# ==========================================
-def log_conversation(
-    customer_info: dict,
-    query: str,
-    intent: str,
-    domains: list,
-    answer: str,
-    claim_status: str = "-",
-    is_complaint: bool = False,
-    is_handoff: bool = False,
-):
+def log_conversation(customer_info, query, intent, domains, answer,
+                     claim_status="-", is_complaint=False, is_handoff=False):
     file_exists = AUDIT_LOG.exists()
     with open(AUDIT_LOG, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=AUDIT_HEADERS)
@@ -339,9 +316,6 @@ def log_conversation(
         })
 
 
-# ==========================================
-# 라우터 & 실행 함수
-# ==========================================
 def router_agent(user_query: str) -> dict:
     a = agents
     customer_info_str = a["format_customer_info"](st.session_state["customer_info"])
@@ -376,6 +350,14 @@ def execute(user_query: str, image_paths: list = None) -> str:
     subscribed_domains   = routing.get("subscribed_domains", [])
     unsubscribed_domains = routing.get("unsubscribed_domains", [])
 
+    domain_to_product = {"auto": "P-C", "cancer": "P-B", "teeth": "P-D"}
+    riders_list = []
+    for p in customer_info.get("policies", []):
+        pid = p.get("product_id", "")
+        if any(domain_to_product.get(d) == pid for d in subscribed_domains):
+            riders_list.append(p.get("riders", ""))
+    riders = ";".join([r for r in riders_list if r])
+
     if intent == "out_of_scope":
         prompt = a["PromptTemplate"].from_template(OUT_OF_SCOPE_PROMPT)
         chain  = prompt | a["llm"] | a["StrOutputParser"]()
@@ -389,7 +371,7 @@ def execute(user_query: str, image_paths: list = None) -> str:
     elif intent == "보장조회":
         answer = a["search_and_answer"](
             user_query, subscribed_domains, customer_context,
-            conversation_history=conversation_history
+            conversation_history=conversation_history, riders=riders
         )
         if unsubscribed_domains:
             domain_kr = {"auto": "자동차보험", "cancer": "암보험", "teeth": "치아보험"}
@@ -410,10 +392,11 @@ def execute(user_query: str, image_paths: list = None) -> str:
         st.session_state["claim_domain"] = domain
         coverage = a["search_and_answer"](
             user_query, subscribed_domains, customer_context,
-            conversation_history=conversation_history
+            conversation_history=conversation_history, riders=riders
         )
         claim  = a["handle_claim"](customer_info, domain, user_query)
-        answer = f"{coverage}\n\n{'─'*40}\n\n{claim}"
+        answer = f"{coverage}\n\n{claim}"
+        answer += "\n\n※ 최종 지급 여부는 실제 심사 결과에 따라 달라질 수 있습니다."
         if len(subscribed_domains) > 1:
             domain_kr = {"auto": "자동차보험", "cancer": "암보험", "teeth": "치아보험"}
             names = [domain_kr.get(d, d) for d in subscribed_domains]
@@ -425,46 +408,31 @@ def execute(user_query: str, image_paths: list = None) -> str:
             conversation_history=conversation_history
         )
 
-    # 불만 감지 + Human Handoff
     is_complaint = False
     is_handoff   = False
     if intent != "out_of_scope":
         try:
-            # 이미 이관됐으면 이관 메시지 생략, 민원은 최초 1회만 생성
-            if st.session_state.get("handoff_done"):
-                complaint_msg = None
-            else:
-                complaint_msg = a["check_and_record"](customer_info, user_query, answer)
-
+            complaint_msg = a["check_and_record"](customer_info, user_query, answer)
             if complaint_msg:
                 is_complaint = True
-                if "전문 상담원" in complaint_msg:
-                    is_handoff = True
-                    st.session_state["handoff_done"] = True  # 이관 완료 플래그
+                is_handoff   = "전문 상담원" in complaint_msg
                 answer += complaint_msg
         except Exception:
             pass
 
-    # 로깅
     log_conversation(
-        customer_info = customer_info,
-        query         = user_query,
-        intent        = intent,
-        domains       = subscribed_domains + unsubscribed_domains,
-        answer        = answer,
-        claim_status  = st.session_state.get("claim_step") or "-",
-        is_complaint  = is_complaint,
-        is_handoff    = is_handoff,
+        customer_info=customer_info, query=user_query, intent=intent,
+        domains=subscribed_domains + unsubscribed_domains, answer=answer,
+        claim_status=st.session_state.get("claim_step") or "-",
+        is_complaint=is_complaint, is_handoff=is_handoff,
     )
-
     return answer
 
 
 def add_message(role: str, content: str):
     st.session_state["chat_history"].append({
-        "role":    role,
-        "content": content,
-        "time":    datetime.now().strftime("%H:%M"),
+        "role": role, "content": content,
+        "time": datetime.now().strftime("%H:%M"),
     })
 
 
@@ -484,24 +452,29 @@ def load_csv(path):
     return pd.DataFrame()
 
 
+def make_bar_chart(series, title=""):
+    """plotly 가로 글씨 바 차트"""
+    df = series.reset_index()
+    df.columns = ["label", "count"]
+    fig = px.bar(df, x="label", y="count", color_discrete_sequence=["#0057b8"])
+    fig.update_layout(
+        xaxis=dict(tickangle=0),
+        xaxis_title="", yaxis_title="건수",
+        margin=dict(t=20, b=40), height=300
+    )
+    return fig
+
+
 # ==========================================
-# 사이드바 — 모드 선택 + 로그인
+# 사이드바
 # ==========================================
 with st.sidebar:
     st.markdown("## 🛡️ 삼성화재 AI")
     st.markdown("---")
-
-    # 모드 선택
-    mode = st.radio(
-        "모드 선택",
-        ["👤 고객 상담", "🔐 관리자"],
-        key="mode_radio",
-        horizontal=True
-    )
+    mode = st.radio("모드 선택", ["👤 고객 상담", "🔐 관리자"], key="mode_radio", horizontal=True)
     st.session_state["mode"] = "admin" if "관리자" in mode else "user"
     st.markdown("---")
 
-    # 고객 모드
     if st.session_state["mode"] == "user":
         if not st.session_state["logged_in"]:
             st.markdown("### 로그인")
@@ -513,7 +486,7 @@ with st.sidebar:
                     if info:
                         st.session_state["logged_in"]     = True
                         st.session_state["customer_info"] = info
-                        add_message("bot", f"안녕하세요, **{info['name']}**님! 😊\n삼성화재 AI 어시스턴트입니다.\n보험 관련 궁금한 점을 편하게 말씀해 주세요.")
+                        add_message("bot", f"안녕하세요, {info['name']}님! 😊\n삼성화재 AI 어시스턴트입니다.\n보험 관련 궁금한 점을 편하게 말씀해 주세요.")
                         st.rerun()
                     else:
                         st.error("ID 또는 비밀번호를 확인해주세요.")
@@ -539,8 +512,6 @@ with st.sidebar:
                 for k in list(st.session_state.keys()):
                     del st.session_state[k]
                 st.rerun()
-
-    # 관리자 모드
     else:
         if not st.session_state["admin_logged_in"]:
             st.markdown("### 관리자 로그인")
@@ -572,8 +543,6 @@ with st.sidebar:
 # ==========================================
 # 메인 콘텐츠
 # ==========================================
-
-# ── 고객 모드 ──────────────────────────────────
 if st.session_state["mode"] == "user":
     if not st.session_state["logged_in"]:
         st.markdown("""
@@ -581,32 +550,31 @@ if st.session_state["mode"] == "user":
             <div style="font-size:4rem;">🛡️</div>
             <h1 style="color:#0057b8; font-weight:700; margin:16px 0 8px;">삼성화재 AI 어시스턴트</h1>
             <p style="color:#666; font-size:1.1rem;">보험 약관 조회부터 청구까지, AI가 도와드립니다.</p>
-            <br>
-            <div style="display:flex; justify-content:center; gap:24px; flex-wrap:wrap;">
-                <div style="background:white;border-radius:12px;padding:20px 28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);min-width:150px;">
-                    <div style="font-size:2rem;">💬</div><p style="color:#333;font-weight:500;margin:8px 0 0;">약관 Q&A</p>
-                </div>
-                <div style="background:white;border-radius:12px;padding:20px 28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);min-width:150px;">
-                    <div style="font-size:2rem;">📋</div><p style="color:#333;font-weight:500;margin:8px 0 0;">보험금 청구</p>
-                </div>
-                <div style="background:white;border-radius:12px;padding:20px 28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);min-width:150px;">
-                    <div style="font-size:2rem;">⚖️</div><p style="color:#333;font-weight:500;margin:8px 0 0;">판례 검색</p>
-                </div>
-                <div style="background:white;border-radius:12px;padding:20px 28px;box-shadow:0 2px 12px rgba(0,0,0,0.08);min-width:150px;">
-                    <div style="font-size:2rem;">🚨</div><p style="color:#333;font-weight:500;margin:8px 0 0;">민원 접수</p>
-                </div>
-            </div>
             <br><br>
             <p style="color:#999;">← 왼쪽에서 로그인해주세요</p>
         </div>
         """, unsafe_allow_html=True)
-
     else:
-        tab_chat, tab_claim, tab_complaint = st.tabs(["💬 채팅 상담", "📋 보험금 청구", "🚨 민원 현황"])
+        tab_chat, tab_claim = st.tabs(["💬 채팅 상담", "📋 보험금 청구"])
 
-        # ── 채팅 탭 ──────────────────────────────
         with tab_chat:
             st.markdown("### 💬 AI 보험 상담")
+
+            # 고정 높이 채팅창
+            chat_box = st.container(height=500)
+            with chat_box:
+                render_chat()
+
+            # 마지막 메시지가 user면 답변 생성
+            if (st.session_state["chat_history"] and
+                    st.session_state["chat_history"][-1]["role"] == "user"):
+                last_query = st.session_state["chat_history"][-1]["content"]
+                with st.spinner("🤔 답변 생성 중..."):
+                    response = execute(last_query)
+                add_message("bot", response)
+                st.rerun()
+
+            st.markdown("---")
 
             with st.form(key="chat_form", clear_on_submit=True):
                 col_input, col_btn = st.columns([5, 1])
@@ -622,16 +590,6 @@ if st.session_state["mode"] == "user":
             if submitted and user_input.strip():
                 add_message("user", user_input.strip())
                 st.rerun()
-
-            if (st.session_state["chat_history"] and
-                    st.session_state["chat_history"][-1]["role"] == "user"):
-                last_query = st.session_state["chat_history"][-1]["content"]
-                with st.spinner("🤔 답변 생성 중..."):
-                    response = execute(last_query)
-                add_message("bot", response)
-                st.rerun()
-
-            render_chat()
 
             if st.session_state.get("claim_step") == "waiting_docs":
                 st.markdown("---")
@@ -652,7 +610,6 @@ if st.session_state["mode"] == "user":
                                 st.image(f, caption=f.name, use_container_width=True)
                             else:
                                 st.markdown(f"📄 {f.name}")
-
                     if st.button("📤 서류 제출 및 검증", key="btn_submit_docs"):
                         with tempfile.TemporaryDirectory() as tmpdir:
                             tmp_paths = []
@@ -673,7 +630,6 @@ if st.session_state["mode"] == "user":
                         st.session_state["claim_step"] = "submitted"
                         st.rerun()
 
-        # ── 청구 탭 ──────────────────────────────
         with tab_claim:
             st.markdown("### 📋 보험금 청구")
             info = st.session_state["customer_info"]
@@ -683,7 +639,6 @@ if st.session_state["mode"] == "user":
                 if p["product_id"] in domain_map:
                     label, domain = domain_map[p["product_id"]]
                     options[label] = domain
-
             if not options:
                 st.warning("청구 가능한 보험이 없습니다.")
             else:
@@ -706,7 +661,6 @@ if st.session_state["mode"] == "user":
                                 st.image(f, caption=f.name, use_container_width=True)
                             else:
                                 st.markdown(f"📄 {f.name}")
-
                 if st.button("📤 청구 접수하기", disabled=not uploaded, key="btn_claim"):
                     with tempfile.TemporaryDirectory() as tmpdir:
                         tmp_paths = []
@@ -731,43 +685,7 @@ if st.session_state["mode"] == "user":
                         st.info(result)
                     add_message("bot", f"[청구 탭] {result}")
 
-        # ── 민원 탭 ──────────────────────────────
-        with tab_complaint:
-            st.markdown("### 🚨 민원 현황")
-            complaint_path = BASE_PATH / "complaint_db.csv"
-            if not complaint_path.exists():
-                st.info("접수된 민원이 없습니다.")
-            else:
-                df = pd.read_csv(complaint_path, encoding="utf-8-sig")
-                my_df = df[df["customer_id"] == st.session_state["customer_info"]["customer_id"]]
-                col1, col2, col3 = st.columns(3)
-                with col1: st.metric("전체 민원", len(my_df))
-                with col2: st.metric("처리 중", len(my_df[my_df["status"] == "접수"]))
-                with col3:
-                    avg = round(my_df["sentiment_score"].mean(), 1) if len(my_df) > 0 else "-"
-                    st.metric("평균 감정 점수", f"{avg} / 10")
-                st.markdown("---")
-                if len(my_df) == 0:
-                    st.info("접수된 민원이 없습니다.")
-                else:
-                    for _, row in my_df.iterrows():
-                        score = row["sentiment_score"]
-                        badge = (
-                            '<span class="badge-red">매우불만</span>' if score <= 3 else
-                            '<span class="badge-orange">불만</span>'   if score <= 5 else
-                            '<span class="badge-blue">보통</span>'     if score <= 7 else
-                            '<span class="badge-green">만족</span>'
-                        )
-                        st.markdown(f"""
-<div class="complaint-row">
-    <b>{row['complaint_id']}</b> · {row['timestamp']} · {badge}
-    <br><span style="color:#666">유형: {row['complaint_type']} | 상태: {row['status']}</span>
-    <br><span style="color:#333;margin-top:4px;display:block;">"{row['customer_query']}"</span>
-</div>
-""", unsafe_allow_html=True)
 
-
-# ── 관리자 모드 ────────────────────────────────
 else:
     if not st.session_state["admin_logged_in"]:
         st.markdown("""
@@ -775,10 +693,9 @@ else:
             <div style="font-size:4rem;">🔐</div>
             <h1 style="color:#1a1a2e; font-weight:700;">관리자 대시보드</h1>
             <p style="color:#666;">← 왼쪽에서 관리자 로그인해주세요</p>
-            <p style="color:#999; font-size:0.9rem;">ID: admin / PW: samsung2026</p>
+            <p style="color:#999; font-size:0.9rem;">ID: admin / PW: 1234</p>
         </div>
         """, unsafe_allow_html=True)
-
     else:
         def filter_by_date(df, col="timestamp"):
             if df.empty or col not in df.columns:
@@ -795,30 +712,28 @@ else:
             "📊 전체 현황", "📋 대화 로그", "🚨 민원 관리", "👤 이관 현황", "👥 고객 현황"
         ])
 
-        # 전체 현황
         with tab_ov:
             st.markdown("### 📊 전체 현황")
             col1, col2, col3, col4, col5 = st.columns(5)
-            metrics = [
-                ("전체 상담", len(audit_df), "건"),
-                ("민원 접수", len(complaint_df), "건"),
-                ("상담원 이관", len(handoff_df), "건"),
-                ("청구 접수", len(audit_df[audit_df["claim_status"] != "-"]) if not audit_df.empty and "claim_status" in audit_df.columns else 0, "건"),
-                ("민원 발생률", f"{round(len(complaint_df)/len(audit_df)*100,1) if len(audit_df)>0 else 0}%", ""),
-            ]
-            for col, (label, val, unit) in zip([col1,col2,col3,col4,col5], metrics):
-                with col:
-                    st.markdown(f"""
-<div class="metric-card">
-  <p>{label}</p><h2>{val}</h2><p>{unit}</p>
-</div>""", unsafe_allow_html=True)
+            with col1: st.metric("전체 상담", f"{len(audit_df)}건")
+            with col2: st.metric("민원 접수", f"{len(complaint_df)}건")
+            with col3: st.metric("상담원 이관", f"{len(handoff_df)}건")
+            with col4:
+                claim_count = len(audit_df[audit_df["claim_status"] != "-"]) if not audit_df.empty and "claim_status" in audit_df.columns else 0
+                st.metric("청구 접수", f"{claim_count}건")
+            with col5:
+                rate = round(len(complaint_df) / len(audit_df) * 100, 1) if len(audit_df) > 0 else 0
+                st.metric("민원 발생률", f"{rate}%")
 
             st.markdown("---")
             if not audit_df.empty and "intent" in audit_df.columns:
                 col_l, col_r = st.columns(2)
                 with col_l:
                     st.markdown("#### 📌 Intent 분포")
-                    st.bar_chart(audit_df["intent"].value_counts())
+                    st.plotly_chart(
+                        make_bar_chart(audit_df["intent"].value_counts()),
+                        use_container_width=True
+                    )
                 with col_r:
                     st.markdown("#### 📌 도메인 분포")
                     if "domains" in audit_df.columns:
@@ -829,7 +744,10 @@ else:
                                 if item and item != "-":
                                     domain_counts[item] = domain_counts.get(item, 0) + 1
                         if domain_counts:
-                            st.bar_chart(pd.Series(domain_counts))
+                            st.plotly_chart(
+                                make_bar_chart(pd.Series(domain_counts)),
+                                use_container_width=True
+                            )
 
             st.markdown("---")
             st.markdown("#### 🕐 최근 상담 10건")
@@ -855,7 +773,6 @@ else:
             else:
                 st.info("기록된 상담 데이터가 없습니다.")
 
-        # 대화 로그
         with tab_log:
             st.markdown("### 📋 전체 대화 로그")
             if audit_df.empty:
@@ -868,7 +785,6 @@ else:
                     complaint_filter = st.selectbox("민원 여부", ["전체", "민원만", "정상만"])
                 with col_f3:
                     customer_filter = st.text_input("고객 ID 검색")
-
                 filtered = audit_df.copy()
                 if intent_filter != "전체":
                     filtered = filtered[filtered["intent"] == intent_filter]
@@ -878,7 +794,6 @@ else:
                     filtered = filtered[filtered["is_complaint"] != True]
                 if customer_filter:
                     filtered = filtered[filtered["customer_id"].str.contains(customer_filter, na=False)]
-
                 st.markdown(f"**총 {len(filtered)}건**")
                 display_cols = [c for c in ["timestamp","customer_name","customer_id","intent","domains","query","answer_preview","is_complaint","is_handoff"] if c in filtered.columns]
                 st.dataframe(filtered[display_cols].sort_values("timestamp", ascending=False), use_container_width=True, height=500)
@@ -889,7 +804,6 @@ else:
                     mime="text/csv"
                 )
 
-        # 민원 관리
         with tab_comp:
             st.markdown("### 🚨 민원 관리")
             if complaint_df.empty:
@@ -916,7 +830,6 @@ else:
     <br><span style="color:#333;">"{row.get('customer_query','-')}"</span>
 </div>""", unsafe_allow_html=True)
 
-        # 이관 현황
         with tab_hand:
             st.markdown("### 👤 상담원 이관 현황")
             if handoff_df.empty:
@@ -935,7 +848,6 @@ else:
     <br><span style="color:#333;">"{row.get('query','-')}"</span>
 </div>""", unsafe_allow_html=True)
 
-        # 고객 현황
         with tab_cust:
             st.markdown("### 👥 고객 현황")
             if customer_df.empty:
@@ -950,7 +862,10 @@ else:
                 st.markdown("---")
                 if "product_name" in customer_df.columns:
                     st.markdown("#### 📌 상품별 가입 현황")
-                    st.bar_chart(customer_df["product_name"].value_counts())
+                    st.plotly_chart(
+                        make_bar_chart(customer_df["product_name"].value_counts()),
+                        use_container_width=True
+                    )
                 st.markdown("---")
                 display_df = customer_df.drop(columns=[c for c in ["password"] if c in customer_df.columns])
                 st.dataframe(display_df, use_container_width=True, height=400)
