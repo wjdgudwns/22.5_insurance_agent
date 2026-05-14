@@ -376,7 +376,7 @@ def execute(user_query: str, image_paths: list = None) -> str:
         if unsubscribed_domains:
             domain_kr = {"auto": "자동차보험", "cancer": "암보험", "teeth": "치아보험"}
             names = [domain_kr.get(d, d) for d in unsubscribed_domains]
-            answer += f"\n\n💡 {', '.join(names)}은 현재 미가입 상태입니다. 가입을 원하시면 삼성화재 홈페이지(www.samsungfire.com)에서 확인해보세요."
+            answer += f"\n\n💡 {', '.join(names)}은 현재 미가입 상태입니다. 가입을 원하시면 삼성화재 홈페이지 www.samsungfire.com 에서 확인해보세요."
 
     elif intent == "미가입문의":
         all_domains = subscribed_domains + unsubscribed_domains
@@ -384,7 +384,7 @@ def execute(user_query: str, image_paths: list = None) -> str:
             user_query, all_domains, "",
             conversation_history=conversation_history
         )
-        answer += "\n\n📌 가입을 원하시면 삼성화재 홈페이지(www.samsungfire.com)에서 가입하실 수 있습니다."
+        answer += "\n\n📌 가입을 원하시면 삼성화재 홈페이지 www.samsungfire.com 에서 가입하실 수 있습니다."
 
     elif intent == "사고청구":
         domain = subscribed_domains[0] if subscribed_domains else "auto"
